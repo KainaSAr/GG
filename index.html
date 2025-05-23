@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameFinder - Главная</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-gamepad"></i>
+                <h1>GameFinder</h1>
+            </div>
+            <nav class="main-nav">
+                <ul>
+                    <li class="active"><a href="index.html"><i class="fas fa-home"></i> Главная</a></li>
+                    <li><a href="search.html"><i class="fas fa-search"></i> Поиск игр</a></li>
+                    <li><a href="license.html"><i class="fas fa-file-contract"></i> Лицензия</a></li>
+                    <li class="auth-section">
+                        <a href="#" class="auth-button"><i class="fas fa-user"></i> Войти</a>
+                        <a href="#" class="user-profile" style="display: none;">
+                            <i class="fas fa-user"></i> <span class="username-display"></span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <button class="mobile-menu-button"><i class="fas fa-bars"></i></button>
+        </div>
+    </header>
+    <main class="main-content">
+        <section class="hero">
+            <div class="container">
+                <h2>Найдите лучшие предложения на игры</h2>
+                <p>Сравнивайте цены на игры в различных магазинах и экономьте до 80%</p>
+                <a href="search.html" class="cta-button">Начать поиск</a>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="container">
+                <h2>Почему выбирают нас?</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <i class="fas fa-percentage"></i>
+                        <h3>Лучшие цены</h3>
+                        <p>Мы сравниваем цены в 20+ магазинах, чтобы вы получили самую выгодную сделку</p>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-bell"></i>
+                        <h3>Уведомления</h3>
+                        <p>Получайте оповещения, когда игры из вашего списка желаемого снижаются в цене</p>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-heart"></i>
+                        <h3>Избранное</h3>
+                        <p>Сохраняйте понравившиеся игры, чтобы вернуться к ним позже</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>GameFinder</h3>
+                    <p>Лучший помощник для поиска игр по выгодным ценам</p>
+                </div>
+                <div class="footer-section">
+                    <h3>Навигация</h3>
+                    <ul>
+                        <li><a href="index.html">Главная</a></li>
+                        <li><a href="search.html">Поиск игр</a></li>
+                        <li><a href="license.html">Лицензия</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h3>Контакты</h3>
+                    <ul>
+                        <li><a href="mailto:info@gamefinder.com">info@gamefinder.com</a></li>
+                        <li><a href="#">Поддержка</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 GameFinder. Все права защищены.</p>
+                <div class="social-links">
+                    <a href="#"><i class="fab fa-vk"></i></a>
+                    <a href="#"><i class="fab fa-telegram"></i></a>
+                    <a href="#"><i class="fab fa-youtube"></i></a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <div class="modal auth-modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div class="auth-forms">
+                <div class="registrationForm">
+                    <h2>Регистрация</h2>
+                    <input type="text" class="regUsername" placeholder="Имя пользователя" required>
+                    <input type="password" class="regPassword" placeholder="Пароль" required>
+                    <button onclick="register()">Зарегистрироваться</button>
+                    <div class="toggle">
+                        <span onclick="toggleForms()">Уже есть аккаунт? Войти</span>
+                    </div>
+                </div>
+
+                <div class="loginForm" style="display: none;">
+                    <h2>Вход</h2>
+                    <input type="text" class="loginUsername" placeholder="Имя пользователя" required>
+                    <input type="password" class="loginPassword" placeholder="Пароль" required>
+                    <button onclick="login()">Войти</button>
+                    <div class="toggle">
+                        <span onclick="toggleForms()">Нет аккаунта? Зарегистрироваться</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

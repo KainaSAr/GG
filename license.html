@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameFinder - Лицензионное соглашение</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-gamepad"></i>
+                <h1>GameFinder</h1>
+            </div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="index.html"><i class="fas fa-home"></i> Главная</a></li>
+                    <li><a href="search.html"><i class="fas fa-search"></i> Поиск игр</a></li>
+                    <li class="active"><a href="license.html"><i class="fas fa-file-contract"></i> Лицензия</a></li>
+                    <li class="auth-section">
+                        <a href="#" class="auth-button"><i class="fas fa-user"></i> Войти</a>
+                        <a href="#" class="user-profile" style="display: none;">
+                            <i class="fas fa-user"></i> <span class="username-display"></span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <button class="mobile-menu-button"><i class="fas fa-bars"></i></button>
+        </div>
+    </header>
+
+    <main class="main-content license-page">
+        <div class="container">
+            <h2><i class="fas fa-file-contract"></i> Лицензионное соглашение</h2>
+            
+            <div class="license-content">
+                <article>
+                    <h3>1. Общие положения</h3>
+                    <p>1.1. Настоящее Лицензионное соглашение регулирует отношения между пользователем и GameFinder по использованию веб-сайта и предоставляемых услуг.</p>
+                    <p>1.2. Используя Сервис, Пользователь соглашается с условиями настоящего Соглашения.</p>
+                </article>
+
+                <article>
+                    <h3>2. Условия использования</h3>
+                    <p>2.1. Сервис предоставляет информацию о ценах на компьютерные игры в различных магазинах.</p>
+                    <p>2.2. Пользователь соглашается использовать Сервис только в законных целях.</p>
+                    <p>2.3. Запрещается использовать автоматизированные системы для сбора данных с Сервиса.</p>
+                </article>
+
+                <article>
+                    <h3>3. Ограничения ответственности</h3>
+                    <p>3.1. Сервис не гарантирует точность предоставляемой информации о ценах и наличии игр.</p>
+                    <p>3.2. Сервис не несет ответственности за любые убытки.</p>
+                </article>
+
+                <article>
+                    <h3>4. Изменения в соглашении</h3>
+                    <p>4.1. Сервис оставляет за собой право вносить изменения в настоящее Соглашение.</p>
+                </article>
+
+                <article>
+                    <h3>5. Контактная информация</h3>
+                    <p>По всем вопросам обращайтесь: <a href="mailto:legal@gamefinder.com">legal@gamefinder.com</a>.</p>
+                </article>
+            </div>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>GameFinder</h3>
+                    <p>Лучший помощник для поиска игр по выгодным ценам</p>
+                </div>
+                <div class="footer-section">
+                    <h3>Навигация</h3>
+                    <ul>
+                        <li><a href="index.html">Главная</a></li>
+                        <li><a href="search.html">Поиск игр</a></li>
+                        <li><a href="license.html">Лицензия</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h3>Контакты</h3>
+                    <ul>
+                        <li><a href="mailto:info@gamefinder.com">info@gamefinder.com</a></li>
+                        <li><a href="#">Поддержка</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 GameFinder. Все права защищены.</p>
+                <div class="social-links">
+                    <a href="#"><i class="fab fa-vk"></i></a>
+                    <a href="#"><i class="fab fa-telegram"></i></a>
+                    <a href="#"><i class="fab fa-youtube"></i></a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <div class="modal auth-modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div class="auth-forms">
+                <div class="registrationForm">
+                    <h2>Регистрация</h2>
+                    <input type="text" class="regUsername" placeholder="Имя пользователя" required>
+                    <input type="password" class="regPassword" placeholder="Пароль" required>
+                    <button onclick="register()">Зарегистрироваться</button>
+                    <div class="toggle">
+                        <span onclick="toggleForms()">Уже есть аккаунт? Войти</span>
+                    </div>
+                </div>
+
+                <div class="loginForm" style="display: none;">
+                    <h2>Вход</h2>
+                    <input type="text" class="loginUsername" placeholder="Имя пользователя" required>
+                    <input type="password" class="loginPassword" placeholder="Пароль" required>
+                    <button onclick="login()">Войти</button>
+                    <div class="toggle">
+                        <span onclick="toggleForms()">Нет аккаунта? Зарегистрироваться</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
