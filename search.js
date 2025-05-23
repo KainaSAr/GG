@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentGames = [];
 
-    // Проверка последнего поиска из истории
+
     const lastSearch = localStorage.getItem('lastSearch');
     if (lastSearch && main_inp) {
         main_inp.value = lastSearch;

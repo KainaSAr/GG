@@ -154,7 +154,7 @@ function saveUserData(user) {
         localStorage.setItem('currentUser', JSON.stringify(user));
     }
 }
-// Добавить эти функции в существующий script.js
+
 
 function addToWishlist(game) {
     const currentUser = getCurrentUser();
@@ -197,7 +197,7 @@ function addToSearchHistory(query) {
     }
     saveUserData(currentUser);
 }
-// Обновленные функции для работы с избранным
+
 function addToWishlist(game) {
     const currentUser = getCurrentUser();
     if (!currentUser) return false;
@@ -232,7 +232,7 @@ function removeFromWishlist(gameID) {
     return false;
 }
 
-// Обновленная функция проверки авторизации
+
 function checkAuthStatus() {
     const currentUser = getCurrentUser();
     const authButton = document.querySelector('.auth-button');

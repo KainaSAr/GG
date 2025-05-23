@@ -35,7 +35,7 @@ body {
     padding: 0 20px;
 }
 
-/* Шапка сайта */
+
 .site-header {
     background-color: var(--primary-color);
     color: white;
@@ -97,7 +97,7 @@ body {
     cursor: pointer;
 }
 
-/* Основное содержимое */
+
 .main-content {
     flex: 1;
     padding: 2rem 0;
@@ -179,7 +179,7 @@ body {
     color: var(--primary-color);
 }
 
-/* Лицензионная страница */
+
 .license-page {
     padding: 3rem 0;
 }
@@ -213,7 +213,7 @@ body {
     line-height: 1.7;
 }
 
-/* Подвал сайта */
+
 .site-footer {
     background-color: var(--dark-color);
     color: white;
@@ -274,7 +274,7 @@ body {
     color: var(--secondary-color);
 }
 
-/* Модальное окно */
+
 .modal {
     display: none;
     position: fixed;
@@ -314,7 +314,7 @@ body {
     padding: 1rem;
 }
 
-/* Формы авторизации */
+
 .registrationForm, .loginForm {
     width: 100%;
 }
@@ -367,7 +367,7 @@ body {
     color: var(--secondary-color);
 }
 
-/* Адаптивность */
+
 @media (max-width: 768px) {
     .main-nav {
         position: fixed;
@@ -408,7 +408,7 @@ body {
         text-align: center;
     }
 }
-/* Стили для кнопки профиля */
+
 #auth-section {
     position: relative;
 }
@@ -430,7 +430,7 @@ body {
     display: none;
 }
 
-/* Для мобильных устройств */
+
 @media (max-width: 768px) {
     #auth-section {
         display: flex;
@@ -442,9 +442,9 @@ body {
         padding: 10px 0;
     }
 }
-/* Мобильные стили */
+
 @media (max-width: 768px) {
-  /* Шапка */
+
   .site-header .container {
     flex-direction: column;
     padding: 10px;
@@ -469,7 +469,7 @@ body {
     padding: 20px;
   }
   
-  /* Поиск */
+
   .search-container {
     flex-direction: column;
   }
@@ -478,17 +478,16 @@ body {
     width: 100%;
   }
   
-  /* Карточки игр */
+
   .game-card {
     width: 100%;
   }
-  
-  /* Профиль */
+
   .profile-sections {
     grid-template-columns: 1fr;
   }
   
-  /* Футер */
+
   .footer-content {
     grid-template-columns: 1fr;
     gap: 20px;
@@ -503,7 +502,7 @@ body {
 html {
   touch-action: manipulation;
 }
-/* Мобильное меню */
+
 @media (max-width: 768px) {
     .mobile-menu-button {
         display: block;

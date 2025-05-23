@@ -33,15 +33,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 </button>
             `;
             
-            // Обработчик удаления из избранного
+           
             const removeBtn = gameElement.querySelector('.remove-btn');
             removeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 removeFromWishlist(item.gameID);
-                // Удаляем элемент из DOM без перезагрузки страницы
+                
                 gameElement.remove();
                 
-                // Если список пуст, показываем сообщение
+               
                 if (container.children.length === 0) {
                     container.innerHTML = '<p class="empty-message">Список желаемого пуст</p>';
                 }
@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </button>
             `;
             
-            // Обработчик поиска из истории
+            
             const searchBtn = historyItem.querySelector('.search-again');
             searchBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
