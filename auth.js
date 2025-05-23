@@ -106,10 +106,7 @@ function initAuthModal() {
     const modal = document.querySelector('.auth-modal');
     const authButton = document.querySelector('.auth-button');
     const closeModal = document.querySelector('.auth-modal .close-modal');
-    const forms = modal.querySelectorAll('input, button');
-  forms.forEach(el => {
-    el.style.fontSize = '16px'; // Убираем автоуменьшение в iOS
-  });
+    
     if (authButton) {
         authButton.addEventListener('click', (e) => {
             e.preventDefault();

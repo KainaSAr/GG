@@ -1,39 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Инициализация элементов
-    const profileButton = document.querySelector('.user-profile');
-    const usernameDisplay = document.querySelector('.username-display');
-    const authButton = document.querySelector('.auth-button');
-    
-    // Проверка авторизации и обновление интерфейса
-    updateAuthUI();
-
-    function updateAuthUI() {
-        const currentUser = getCurrentUser();
-        if (currentUser) {
-            if (usernameDisplay) usernameDisplay.textContent = currentUser.username;
-            if (profileButton) profileButton.style.display = 'flex';
-            if (authButton) authButton.style.display = 'none';
-        } else {
-            if (profileButton) profileButton.style.display = 'none';
-            if (authButton) authButton.style.display = 'flex';
-            if (usernameDisplay) usernameDisplay.textContent = '';
-        }
-    }
-
-    // Обработчики модального окна профиля
-    if (profileButton) {
-        profileButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            const currentUser = getCurrentUser();
-            if (currentUser) {
-                window.location.href = 'profile.html';
-            } else {
-                window.location.href = 'index.html';
-            }
-        });
-    }
-
-    // Поиск игр (основной функционал)
     const btn_request = document.querySelector(".btn_request");
     const main_inp = document.querySelector(".main-inp");
     const resultsDiv = document.querySelector(".results");
@@ -112,7 +77,13 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(error => {
                 console.error(error);
                 if (resultsDiv) {
-                    resultsDiv.innerHTML = '<div class="error">Произошла ошибка при получении данных.</div>';
+                    resultsDiv.innerHTML = `
+                        <div class="error">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>Произошла ошибка при получении данных</p>
+                            <small>${error.message || ''}</small>
+                        </div>
+                    `;
                 }
             })
             .finally(() => {
@@ -159,19 +130,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createGameCard(game) {
-        const img = gameCard.querySelector('img');
-  if (img) {
-    img.loading = 'lazy';
-    img.decoding = 'async';
-  }
-
         const gameCard = document.createElement('div');
         gameCard.className = 'game-card';
         
         const price = parseFloat(game.cheapest);
         const priceDisplay = isNaN(price) ? 'Цена не указана' : `$${price.toFixed(2)}`;
         const currentUser = getCurrentUser();
-        const isInWishlist = currentUser?.wishlist?.some(item => item.gameID === game.gameID) || false;
+        let isInWishlist = currentUser?.wishlist?.some(item => item.gameID === game.gameID) || false;
         
         gameCard.innerHTML = `
             ${game.thumb ? `<img src="${game.thumb}" alt="${game.external}" class="game-image" loading="lazy">` : '<div class="game-image">No image</div>'}
@@ -185,22 +150,20 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         
         gameCard.addEventListener('click', (e) => {
-            // Не открывать ссылку, если кликнули на кнопку избранного
             if (e.target.closest('.wishlist-button')) return;
-            
             if (game.gameID) {
                 window.open(`https://www.cheapshark.com/redirect?dealID=${game.cheapestDealID}`, '_blank');
             }
         });
         
-        // Обработчик для кнопки избранного
         const wishlistBtn = gameCard.querySelector('.wishlist-button');
         if (wishlistBtn) {
-            wishlistBtn.addEventListener('click', (e) => {
+            wishlistBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const currentUser = getCurrentUser();
+                
                 if (!currentUser) {
-                    alert('Для добавления в избранное необходимо авторизоваться');
+                    showAlert('Для добавления в избранное необходимо авторизоваться');
                     return;
                 }
                 
@@ -208,27 +171,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 const gameData = currentGames.find(g => g.gameID === gameId);
                 
                 if (isInWishlist) {
-                    removeFromWishlist(gameId);
-                    wishlistBtn.innerHTML = `<i class="far fa-heart"></i> В избранное`;
-                    wishlistBtn.classList.remove('in-wishlist');
+                    const success = await removeFromWishlist(gameId);
+                    if (success) {
+                        isInWishlist = false;
+                        wishlistBtn.innerHTML = `<i class="far fa-heart"></i> В избранное`;
+                        wishlistBtn.classList.remove('in-wishlist');
+                    }
                 } else {
-                    addToWishlist(gameData);
-                    wishlistBtn.innerHTML = `<i class="fas fa-heart"></i> В избранном`;
-                    wishlistBtn.classList.add('in-wishlist');
+                    const success = await addToWishlist(gameData);
+                    if (success) {
+                        isInWishlist = true;
+                        wishlistBtn.innerHTML = `<i class="fas fa-heart"></i> В избранном`;
+                        wishlistBtn.classList.add('in-wishlist');
+                    }
                 }
             });
         }
         
         return gameCard;
-    }
-
-    // Мобильное меню
-    const mobileMenuButton = document.querySelector('.mobile-menu-button');
-    const mainNav = document.querySelector('.main-nav');
-
-    if (mobileMenuButton && mainNav) {
-        mobileMenuButton.addEventListener('click', () => {
-            mainNav.classList.toggle('active');
-        });
     }
 });

@@ -158,14 +158,11 @@ function saveUserData(user) {
 
 function addToWishlist(game) {
     const currentUser = getCurrentUser();
-    if (!currentUser) return false;
+    if (!currentUser) return;
 
     if (!currentUser.wishlist) currentUser.wishlist = [];
 
-    // Проверяем, есть ли уже игра в избранном
-    const existingIndex = currentUser.wishlist.findIndex(item => item.gameID === game.gameID);
-    
-    if (existingIndex === -1) {
+    if (!currentUser.wishlist.some(item => item.gameID === game.gameID)) {
         currentUser.wishlist.push({
             gameID: game.gameID,
             title: game.external,
@@ -174,9 +171,7 @@ function addToWishlist(game) {
             thumb: game.thumb
         });
         saveUserData(currentUser);
-        return true;
     }
-    return false;
 }
 
 function addToSearchHistory(query) {
@@ -237,7 +232,7 @@ function removeFromWishlist(gameID) {
     return false;
 }
 
-
+// Обновленная функция проверки авторизации
 function checkAuthStatus() {
     const currentUser = getCurrentUser();
     const authButton = document.querySelector('.auth-button');
