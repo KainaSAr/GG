@@ -75,3 +75,17 @@ document.addEventListener('DOMContentLoaded', () => {
     checkAuthStatus();
     setupMobileMenu();
 });
+function setupMobileMenu() {
+  const mobileMenuButton = document.querySelector('.mobile-menu-button');
+  const mainNav = document.querySelector('.main-nav');
+  
+  if (mobileMenuButton && mainNav) {
+    mobileMenuButton.addEventListener('click', () => {
+      mainNav.classList.toggle('active');
+      mobileMenuButton.innerHTML = mainNav.classList.contains('active') 
+        ? '<i class="fas fa-times"></i>' 
+        : '<i class="fas fa-bars"></i>';
+    });
+  }
+}
+document.addEventListener('touchstart', function() {}, {passive: true});

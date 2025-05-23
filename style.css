@@ -442,3 +442,64 @@ body {
         padding: 10px 0;
     }
 }
+/* Мобильные стили */
+@media (max-width: 768px) {
+  /* Шапка */
+  .site-header .container {
+    flex-direction: column;
+    padding: 10px;
+  }
+  
+  .main-nav {
+    position: fixed;
+    top: 70px;
+    left: -100%;
+    width: 100%;
+    background: var(--primary-color);
+    transition: left 0.3s;
+    z-index: 1000;
+  }
+  
+  .main-nav.active {
+    left: 0;
+  }
+  
+  .main-nav ul {
+    flex-direction: column;
+    padding: 20px;
+  }
+  
+  /* Поиск */
+  .search-container {
+    flex-direction: column;
+  }
+  
+  .main-inp, .btn_request {
+    width: 100%;
+  }
+  
+  /* Карточки игр */
+  .game-card {
+    width: 100%;
+  }
+  
+  /* Профиль */
+  .profile-sections {
+    grid-template-columns: 1fr;
+  }
+  
+  /* Футер */
+  .footer-content {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+html {
+  touch-action: manipulation;
+}

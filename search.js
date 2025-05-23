@@ -159,6 +159,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createGameCard(game) {
+        const img = gameCard.querySelector('img');
+  if (img) {
+    img.loading = 'lazy';
+    img.decoding = 'async';
+  }
+
         const gameCard = document.createElement('div');
         gameCard.className = 'game-card';
         
