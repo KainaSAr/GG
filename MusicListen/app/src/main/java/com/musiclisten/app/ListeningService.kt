@@ -107,7 +107,9 @@ class ListeningService : Service() {
                     }
 
                     quietStreak = 0
-                    musicStreak += if (verdict.score >= ListenTiming.STRONG_PROBE_SCORE) 2 else 1
+                    // One loud window is not enough: a party produces single bursts
+                    // that look tonal. Wait for a second confirming probe.
+                    musicStreak += 1
                     sendStatus(
                         getString(R.string.status_music_nearby, "%.0f".format(verdict.score * 100))
                     )
