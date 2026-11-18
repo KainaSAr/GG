@@ -5,7 +5,6 @@ import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
-import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -16,9 +15,13 @@ class AuddClient(
         .readTimeout(40, TimeUnit.SECONDS)
         .writeTimeout(40, TimeUnit.SECONDS)
         .build(),
+    private val endpoint: String = "https://api.audd.io/",
 ) {
     fun recognize(audioFile: File): TrackResult? {
         require(apiToken.isNotBlank()) { "AudD API token is missing" }
+        require(audioFile.exists() && audioFile.length() > 44L) {
+            "Audio file is missing or empty: ${audioFile.absolutePath}"
+        }
 
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
@@ -31,8 +34,26 @@ class AuddClient(
             )
             .build()
 
+        return execute(body)
+    }
+
+    fun recognizeUrl(audioUrl: String): TrackResult? {
+        require(apiToken.isNotBlank()) { "AudD API token is missing" }
+        require(audioUrl.isNotBlank()) { "Audio URL is blank" }
+
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("api_token", apiToken)
+            .addFormDataPart("return", "apple_music,spotify")
+            .addFormDataPart("url", audioUrl)
+            .build()
+
+        return execute(body)
+    }
+
+    private fun execute(body: MultipartBody): TrackResult? {
         val request = Request.Builder()
-            .url("https://api.audd.io/")
+            .url(endpoint)
             .post(body)
             .build()
 
@@ -41,21 +62,7 @@ class AuddClient(
             if (!response.isSuccessful) {
                 throw IllegalStateException("AudD HTTP ${response.code}: $raw")
             }
-            return parse(raw)
+            return AuddResponseParser.parse(raw)
         }
-    }
-
-    private fun parse(raw: String): TrackResult? {
-        val root = JSONObject(raw)
-        if (root.optString("status") != "success") {
-            val error = root.optJSONObject("error")
-            val message = error?.optString("error_message") ?: root.toString()
-            throw IllegalStateException(message)
-        }
-        val result = root.optJSONObject("result") ?: return null
-        val title = result.optString("title").ifBlank { return null }
-        val artist = result.optString("artist").ifBlank { "Unknown artist" }
-        val album = result.optString("album").takeIf { it.isNotBlank() }
-        return TrackResult(title = title, artist = artist, album = album)
     }
 }

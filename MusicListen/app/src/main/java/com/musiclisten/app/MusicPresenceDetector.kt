@@ -91,22 +91,28 @@ class MusicPresenceDetector(
             return Result(false, score, rms, "choppy")
         }
 
-        // Music usually has both low (kick/bass) and mid content.
-        if (lowRatio in 0.08..0.55 && midRatio in 0.25..0.75) {
+        // Music usually has low (bass) and/or mid harmonic content.
+        if (lowRatio in 0.05..0.70 && midRatio in 0.15..0.80) {
             score += 0.30
             reasons += "bands"
+        } else if (lowRatio + midRatio > 0.55) {
+            score += 0.18
+            reasons += "bands_low"
         } else if (midRatio > 0.45) {
             score += 0.12
         }
 
-        // Very high ZCR → hiss/noise; very speech-bursty mid-high ZCR with low sustain already filtered.
+        // ZCR: tonal music often sits low (~100–800). Hiss/noise is very high.
         when {
-            zcr in 800.0..4500.0 -> {
+            zcr in 80.0..4200.0 -> {
                 score += 0.20
                 reasons += "zcr"
             }
-            zcr in 450.0..800.0 || zcr in 4500.0..6500.0 -> score += 0.08
-            else -> score -= 0.10
+            zcr in 4200.0..7000.0 -> score += 0.05
+            zcr > 7000.0 -> {
+                score -= 0.25
+                reasons += "zcr_noise"
+            }
         }
 
         // Prefer non-hiss textures.
@@ -114,12 +120,12 @@ class MusicPresenceDetector(
             score += 0.15
             reasons += "tonal"
         } else if (flatness > 0.8 && highRatio > 0.45) {
-            score -= 0.15
+            score -= 0.20
             reasons += "hiss"
         }
 
         val isMusic = score >= 0.55
-        return Result(isMusic, score, rms, reasons.joinToString(","))
+        return Result(isMusic, score.coerceIn(0.0, 1.0), rms, reasons.joinToString(","))
     }
 
     private fun bandEnergy(pcm: ShortArray, fLow: Double, fHigh: Double): Double {

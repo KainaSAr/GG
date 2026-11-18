@@ -16,7 +16,7 @@
     <string name="status_error">No match</string>
     <string name="last_message_empty">Last result will show here as a plain message.</string>
     <string name="last_message_fmt">%1$s\n%2$s</string>
-    <string name="hint">Local audio analysis runs continuously. AudD is called only after sustained music is detected, then cools down. Allow battery unrestricted for reliable always-on.</string>
+    <string name="hint">Local audio analysis runs continuously. AudD is called only after sustained music is detected, then a short cooldown. Allow battery unrestricted for reliable always-on.</string>
     <string name="service_channel">Background</string>
     <string name="service_channel_desc">Quiet indicator while watching</string>
     <string name="service_title">Listen</string>

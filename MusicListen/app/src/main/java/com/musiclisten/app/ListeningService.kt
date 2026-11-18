@@ -81,25 +81,24 @@ class ListeningService : Service() {
             }
 
             while (isActive) {
+                refreshWakeLock()
                 try {
-                    // Local probe only — no network.
                     val probe = withContext(Dispatchers.IO) {
-                        monitor.readPcm(PROBE_MS)
+                        monitor.readPcm(ListenTiming.PROBE_MS)
                     }
                     val verdict = detector.analyze(probe)
 
                     if (!verdict.isMusicLikely) {
                         musicStreak = 0
                         quietStreak++
-                        // After music clearly stops, shorten remaining cooldown a bit
-                        // so the next song can be identified without waiting the full window.
                         if (quietStreak == 4 && nextApiAllowedAt > 0L) {
-                            val softened = System.currentTimeMillis() + 20_000L
+                            val softened =
+                                System.currentTimeMillis() + ListenTiming.QUIET_SOFTEN_COOLDOWN_MS
                             if (softened < nextApiAllowedAt) nextApiAllowedAt = softened
                         }
                         sendStatus(getString(R.string.status_watching))
                         updateServiceText(getString(R.string.service_text_watching))
-                        delay(PROBE_GAP_MS)
+                        delay(ListenTiming.PROBE_GAP_MS)
                         continue
                     }
 
@@ -111,12 +110,11 @@ class ListeningService : Service() {
                     updateServiceText(getString(R.string.service_text_music))
 
                     val now = System.currentTimeMillis()
-                    if (musicStreak < REQUIRED_MUSIC_STREAK || now < nextApiAllowedAt) {
-                        delay(PROBE_GAP_MS)
+                    if (musicStreak < ListenTiming.REQUIRED_MUSIC_STREAK || now < nextApiAllowedAt) {
+                        delay(ListenTiming.PROBE_GAP_MS)
                         continue
                     }
 
-                    // Confirmed sustained music → one AudD call.
                     musicStreak = 0
                     sendStatus(getString(R.string.status_identifying))
                     updateServiceText(getString(R.string.service_text_identifying))
@@ -124,7 +122,7 @@ class ListeningService : Service() {
                     val wav = File(cacheDir, "snippet_${System.currentTimeMillis()}.wav")
                     val result = try {
                         withContext(Dispatchers.IO) {
-                            monitor.captureWav(wav, CAPTURE_MS)
+                            monitor.captureWav(wav, ListenTiming.CAPTURE_MS)
                             audd().recognize(wav)
                         }
                     } finally {
@@ -138,29 +136,30 @@ class ListeningService : Service() {
                         Prefs.saveLastTrack(this@ListeningService, result.title, result.artist)
 
                         val key = "${result.title}|${result.artist}".lowercase()
-                        val sameAsLast = key == lastNotifiedKey
                         val recentlySame =
-                            sameAsLast && now - lastNotifiedAt < SAME_TRACK_SUPPRESS_MS
+                            key == lastNotifiedKey && now - lastNotifiedAt < ListenTiming.SAME_TRACK_SUPPRESS_MS
                         if (!recentlySame) {
                             showTrackMessage(result)
                             sendTrack(result)
                             lastNotifiedKey = key
-                            lastNotifiedAt = now
+                            lastNotifiedAt = System.currentTimeMillis()
                         }
 
-                        nextApiAllowedAt = System.currentTimeMillis() + COOLDOWN_AFTER_MATCH_MS
+                        nextApiAllowedAt =
+                            System.currentTimeMillis() + ListenTiming.COOLDOWN_AFTER_MATCH_MS
                         sendStatus(getString(R.string.status_matched, result.title, result.artist))
                         updateServiceText(getString(R.string.service_text_watching))
                     } else {
-                        nextApiAllowedAt = System.currentTimeMillis() + COOLDOWN_AFTER_MISS_MS
+                        nextApiAllowedAt =
+                            System.currentTimeMillis() + ListenTiming.COOLDOWN_AFTER_MISS_MS
                         sendStatus(getString(R.string.status_error))
                         updateServiceText(getString(R.string.service_text_watching))
                     }
                 } catch (t: Throwable) {
-                    nextApiAllowedAt = System.currentTimeMillis() + COOLDOWN_AFTER_ERROR_MS
+                    nextApiAllowedAt =
+                        System.currentTimeMillis() + ListenTiming.COOLDOWN_AFTER_ERROR_MS
                     sendStatus(t.message ?: getString(R.string.status_error))
                     updateServiceText(getString(R.string.service_text_watching))
-                    // Recreate mic session after errors.
                     runCatching {
                         withContext(Dispatchers.IO) {
                             monitor.release()
@@ -170,7 +169,7 @@ class ListeningService : Service() {
                     }
                 }
 
-                delay(PROBE_GAP_MS)
+                delay(ListenTiming.PROBE_GAP_MS)
             }
         }
     }
@@ -192,18 +191,30 @@ class ListeningService : Service() {
     private fun acquireWakeLock() {
         if (wakeLock?.isHeld == true) return
         val pm = getSystemService(PowerManager::class.java)
-        wakeLock = pm.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "Listen::MicWatch",
-        ).apply {
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Listen::MicWatch").apply {
             setReferenceCounted(false)
-            acquire(6 * 60 * 60 * 1000L) // refreshed by ongoing service use
+            acquire(WAKE_LOCK_CHUNK_MS)
+        }
+    }
+
+    private fun refreshWakeLock() {
+        val lock = wakeLock
+        if (lock == null || !lock.isHeld) {
+            acquireWakeLock()
+            return
+        }
+        // Re-acquire in chunks so always-on does not die after a single timeout.
+        runCatching {
+            lock.acquire(WAKE_LOCK_CHUNK_MS)
+        }.onFailure {
+            releaseWakeLock()
+            acquireWakeLock()
         }
     }
 
     private fun releaseWakeLock() {
         wakeLock?.let { lock ->
-            if (lock.isHeld) lock.release()
+            if (lock.isHeld) runCatching { lock.release() }
         }
         wakeLock = null
     }
@@ -312,7 +323,6 @@ class ListeningService : Service() {
         releaseWakeLock()
         scope.cancel()
         isRunning = false
-        // If user still wants always-on, system may restart via START_STICKY / boot.
         super.onDestroy()
     }
 
@@ -329,15 +339,7 @@ class ListeningService : Service() {
         private const val RESULT_CHANNEL_ID = "track_message"
         private const val SERVICE_NOTIFICATION_ID = 41
         private const val RESULT_NOTIFICATION_ID = 42
-
-        private const val PROBE_MS = 900L
-        private const val PROBE_GAP_MS = 1_100L
-        private const val CAPTURE_MS = 7_000L
-        private const val REQUIRED_MUSIC_STREAK = 2
-        private const val COOLDOWN_AFTER_MATCH_MS = 120_000L
-        private const val COOLDOWN_AFTER_MISS_MS = 75_000L
-        private const val COOLDOWN_AFTER_ERROR_MS = 90_000L
-        private const val SAME_TRACK_SUPPRESS_MS = 180_000L
+        private const val WAKE_LOCK_CHUNK_MS = 30 * 60 * 1000L
 
         @Volatile
         var isRunning: Boolean = false
