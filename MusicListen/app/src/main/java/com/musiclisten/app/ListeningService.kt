@@ -155,7 +155,8 @@ class ListeningService : Service() {
                                     vibrate = true,
                                 )
                                 is TicketEvent.Cell -> publishAnswer(answer, event.label, vibrate = false)
-                                TicketEvent.NoCard, TicketEvent.Miss -> publishAnswer(answer, result.title, vibrate = false)
+                                TicketEvent.NoCard, TicketEvent.Miss, TicketEvent.NeedKey ->
+                                    publishAnswer(answer, result.title, vibrate = false)
                                 TicketEvent.Already -> updateServiceText(answer)
                             }
                             sendTrack(result, event)
@@ -240,21 +241,27 @@ class ListeningService : Service() {
     private fun applyToTicket(result: TrackResult): TicketEvent {
         val cells = TicketStore.cells(this)
         if (cells.none { it.isNotBlank() }) return TicketEvent.NoCard
-        val hit = TicketMatcher.match(result.title, result.artist, cells) ?: return TicketEvent.Miss
+        val goKey = TokenStore.goKey(this)
+        if (goKey.isBlank()) return TicketEvent.NeedKey
+        val hitIndex = NeuralCardMarker(goKey, TokenStore.goSession(this))
+            .mark(cells, result.title, result.artist)
+            ?: return TicketEvent.Miss
+        if (hitIndex !in cells.indices || cells[hitIndex].isBlank()) return TicketEvent.Miss
+        val hit = hitIndex
         val size = TicketStore.gridSize(this)
         val target = TicketStore.goal(this)
         val filled = BooleanArray(cells.size) { cells[it].isNotBlank() }
         val before = TicketStore.marks(this)
-        val already = before.getOrElse(hit.index) { false }
+        val already = before.getOrElse(hit) { false }
         val metBefore = LineChecker.goalReached(size, before, target, filled)
-        if (!already) TicketStore.setMarked(this, hit.index, true)
+        if (!already) TicketStore.setMarked(this, hit, true)
         val after = TicketStore.marks(this)
         if (!already && !metBefore && LineChecker.goalReached(size, after, target, filled)) {
-            val line = LineChecker.lineContaining(size, after, filled, hit.index)
-            val names = if (line != null) LineChecker.label(cells, line) else cells[hit.index]
-            return TicketEvent.Line(hit.index, names)
+            val line = LineChecker.lineContaining(size, after, filled, hit)
+            val names = if (line != null) LineChecker.label(cells, line) else cells[hit]
+            return TicketEvent.Line(hit, names)
         }
-        if (!already) return TicketEvent.Cell(hit.index, cells[hit.index].ifBlank { result.title })
+        if (!already) return TicketEvent.Cell(hit, cells[hit])
         return TicketEvent.Already
     }
 
@@ -400,6 +407,7 @@ class ListeningService : Service() {
 
         private sealed class TicketEvent {
             data object NoCard : TicketEvent()
+            data object NeedKey : TicketEvent()
             data object Miss : TicketEvent()
             data object Already : TicketEvent()
             data class Cell(val index: Int, val label: String) : TicketEvent()

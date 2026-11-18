@@ -24,7 +24,7 @@
     <string name="status_error">Не узнало</string>
     <string name="last_message_empty">Впиши песни со своего бланка. Совпадение само зачеркнётся.</string>
     <string name="last_message_fmt">%1$s\n%2$s</string>
-    <string name="hint">Пауза между треками сбрасывает ожидание, следующий клип узнаётся сразу. Ложный крик «лото» штрафуется — сверь линию перед тем, как кричать.</string>
+    <string name="hint">Клетку отмечает нейросеть по фото бланка: там числа и куски названий, не точный текст. Пауза между треками снимает ожидание.</string>
     <string name="service_channel">Фон</string>
     <string name="service_channel_desc">Тихий индикатор, пока микрофон включён</string>
     <string name="service_title">Listen</string>

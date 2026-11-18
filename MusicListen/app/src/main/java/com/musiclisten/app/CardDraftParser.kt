@@ -17,7 +17,7 @@ object CardDraftParser {
         require(arr.length() == expected) {
             "Ожидалось $expected клеток, пришло ${arr.length()}"
         }
-        val cells = List(expected) { index -> arr.optString(index).trim() }
+        val cells = List(expected) { index -> cellText(arr, index) }
         return CardDraft(size, cells)
     }
 
@@ -29,5 +29,12 @@ object CardDraftParser {
         val end = body.lastIndexOf('}')
         require(start >= 0 && end > start) { "Модель не вернула бланк" }
         return body.substring(start, end + 1)
+    }
+
+    /** Models often emit bare numbers for number-only cells. optString drops those. */
+    private fun cellText(arr: org.json.JSONArray, index: Int): String {
+        val value = arr.opt(index)
+        if (value == null || value == JSONObject.NULL) return ""
+        return value.toString().trim()
     }
 }

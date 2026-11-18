@@ -24,6 +24,14 @@ class CardDraftParserTest {
     }
 
     @Test
+    fun keepsNumberOnlyCells() {
+        val cells = (1..16).joinToString(",") { if (it % 2 == 0) "$it" else "\"песня $it\"" }
+        val draft = CardDraftParser.parse("""{"size":4,"cells":[$cells]}""")
+        assertEquals("2", draft.cells[1])
+        assertEquals("песня 1", draft.cells[0])
+    }
+
+    @Test
     fun rejectsWrongCellCount() {
         try {
             CardDraftParser.parse("""{"size":4,"cells":["только одна"]}""")
