@@ -13,9 +13,7 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
         val app = context.applicationContext
-        val shouldStart = runCatching {
-            Prefs.wantRunning(app) && TokenStore.get(app).isNotBlank()
-        }.getOrDefault(false)
+        val shouldStart = runCatching { Prefs.wantRunning(app) }.getOrDefault(false)
         if (shouldStart) {
             runCatching { ListeningService.start(app) }
         }

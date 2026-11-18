@@ -7,9 +7,6 @@ object TokenStore {
     private const val KEY = "audd_token"
     private const val GO_KEY = "opencode_go_key"
     private const val GO_SESSION = "opencode_go_session"
-    private const val ACR_HOST = "acr_host"
-    private const val ACR_KEY = "acr_key"
-    private const val ACR_SECRET = "acr_secret"
 
     fun get(context: Context): String {
         val saved = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -39,29 +36,6 @@ object TokenStore {
             .edit()
             .putString(GO_KEY, key.trim())
             .apply()
-    }
-
-    fun acr(context: Context): AcrCredentials {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val host = prefs.getString(ACR_HOST, "").orEmpty().trim()
-            .ifBlank { "identify-eu-west-1.acrcloud.com" }
-        return AcrCredentials(
-            host = host,
-            accessKey = prefs.getString(ACR_KEY, "").orEmpty().trim(),
-            accessSecret = prefs.getString(ACR_SECRET, "").orEmpty().trim(),
-        )
-    }
-
-    fun setAcr(context: Context, host: String, accessKey: String, accessSecret: String) {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val nextKey = accessKey.trim()
-        val previous = prefs.getString(ACR_KEY, "").orEmpty()
-        prefs.edit()
-            .putString(ACR_HOST, host.trim())
-            .putString(ACR_KEY, nextKey)
-            .putString(ACR_SECRET, accessSecret.trim())
-            .apply()
-        if (previous != nextKey) ProviderState.clear(context, "ACRCloud")
     }
 
     fun goSession(context: Context): String {

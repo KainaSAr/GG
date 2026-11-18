@@ -1,16 +1,21 @@
 package com.musiclisten.app
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import kotlinx.coroutines.CoroutineScope
@@ -31,7 +36,10 @@ class ListeningService : Service() {
     private val monitor = AudioMonitor()
     private val detector = MusicPresenceDetector()
     private var wakeLock: PowerManager.WakeLock? = null
-    private var wakeRefreshAt = 0L
+    private var wifiLock: WifiManager.WifiLock? = null
+    private var screenRegistered = false
+    private var restartScheduled = false
+    private var keepAlive = true
     private var shownServiceText: String? = null
     private var lastStatus: String? = null
     private var lastAnswerLine: String? = null
@@ -44,6 +52,7 @@ class ListeningService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                keepAlive = false
                 Prefs.setWantRunning(this, false)
                 stopSelfSafe()
                 return START_NOT_STICKY
@@ -65,6 +74,9 @@ class ListeningService : Service() {
         createChannels()
         promoteForeground()
         acquireWakeLock()
+        acquireWifiLock()
+        watchScreen()
+        scope.launch(Dispatchers.IO) { RootKeepAlive.apply(packageName) }
 
         isRunning = true
         sendStatus(getString(R.string.status_watching))
@@ -77,16 +89,19 @@ class ListeningService : Service() {
             var lastNotifiedAt = 0L
             var quietStreak = 0
 
-            try {
-                withContext(Dispatchers.IO) { monitor.ensureStarted() }
-            } catch (t: Throwable) {
-                sendStatus(t.message ?: getString(R.string.status_error))
-                stopSelfSafe()
-                return@launch
+            while (isActive) {
+                try {
+                    withContext(Dispatchers.IO) { monitor.ensureStarted() }
+                    break
+                } catch (t: Throwable) {
+                    sendStatus(t.message ?: getString(R.string.status_error))
+                    holdLocks()
+                    delay(2_000L)
+                }
             }
 
             while (isActive) {
-                refreshWakeLock()
+                holdLocks()
                 try {
                     val probe = withContext(Dispatchers.IO) {
                         monitor.readPcm(ListenTiming.PROBE_MS)
@@ -211,30 +226,58 @@ class ListeningService : Service() {
         ServiceCompat.startForeground(this, SERVICE_NOTIFICATION_ID, notification, type)
     }
 
+    private val screenEvents = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            holdLocks()
+            scope.launch(Dispatchers.IO) {
+                runCatching { monitor.ensureStarted() }
+            }
+        }
+    }
+
+    private fun watchScreen() {
+        if (screenRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }
+        registerReceiver(screenEvents, filter)
+        screenRegistered = true
+    }
+
+    private fun unwatchScreen() {
+        if (!screenRegistered) return
+        runCatching { unregisterReceiver(screenEvents) }
+        screenRegistered = false
+    }
+
     private fun acquireWakeLock() {
         if (wakeLock?.isHeld == true) return
         val pm = getSystemService(PowerManager::class.java)
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Listen::MicWatch").apply {
             setReferenceCounted(false)
-            acquire(WAKE_LOCK_CHUNK_MS)
+            acquire()
         }
     }
 
-    private fun refreshWakeLock() {
-        val now = System.currentTimeMillis()
-        if (wakeLock?.isHeld == true && now < wakeRefreshAt) return
-        wakeRefreshAt = now + WAKE_REFRESH_MS
-        val lock = wakeLock
-        if (lock == null || !lock.isHeld) {
-            acquireWakeLock()
-            return
+    private fun acquireWifiLock() {
+        if (wifiLock?.isHeld == true) return
+        val wifi = applicationContext.getSystemService(WifiManager::class.java) ?: return
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+        } else {
+            @Suppress("DEPRECATION")
+            WifiManager.WIFI_MODE_FULL_HIGH_PERF
         }
-        runCatching {
-            lock.acquire(WAKE_LOCK_CHUNK_MS)
-        }.onFailure {
-            releaseWakeLock()
-            acquireWakeLock()
+        wifiLock = wifi.createWifiLock(mode, "Listen::Net").apply {
+            setReferenceCounted(false)
+            acquire()
         }
+    }
+
+    private fun holdLocks() {
+        if (wakeLock?.isHeld != true) acquireWakeLock()
+        if (wifiLock?.isHeld != true) acquireWifiLock()
     }
 
     private fun releaseWakeLock() {
@@ -242,6 +285,10 @@ class ListeningService : Service() {
             if (lock.isHeld) runCatching { lock.release() }
         }
         wakeLock = null
+        wifiLock?.let { lock ->
+            if (lock.isHeld) runCatching { lock.release() }
+        }
+        wifiLock = null
     }
 
     private fun applyToTicket(result: TrackResult): TicketEvent {
@@ -312,7 +359,7 @@ class ListeningService : Service() {
             Intent(this, ListeningService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Builder(this, SERVICE_CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, SERVICE_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_note)
             .setContentTitle(getString(R.string.service_title))
             .setContentText(text)
@@ -320,7 +367,10 @@ class ListeningService : Service() {
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .addAction(0, getString(R.string.stop), stop)
-            .build()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        }
+        return builder.build()
     }
 
     private fun updateServiceText(text: String) {
@@ -380,10 +430,16 @@ class ListeningService : Service() {
         )
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (Prefs.wantRunning(this)) scheduleRestart()
+        super.onTaskRemoved(rootIntent)
+    }
+
     private fun stopSelfSafe() {
         loopJob?.cancel()
         loopJob = null
         monitor.release()
+        unwatchScreen()
         releaseWakeLock()
         isRunning = false
         sendStatus(getString(R.string.status_stopped))
@@ -392,12 +448,34 @@ class ListeningService : Service() {
     }
 
     override fun onDestroy() {
+        val restart = Prefs.wantRunning(this)
         loopJob?.cancel()
         monitor.release()
+        unwatchScreen()
         releaseWakeLock()
         scope.cancel()
         isRunning = false
+        if (restart && keepAlive) scheduleRestart()
         super.onDestroy()
+    }
+
+    private fun scheduleRestart() {
+        if (restartScheduled) return
+        restartScheduled = true
+        val intent = Intent(this, ListeningService::class.java)
+        val pending = PendingIntent.getService(
+            this,
+            7,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val alarm = getSystemService(AlarmManager::class.java)
+        val whenMs = SystemClock.elapsedRealtime() + 1_500L
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarm.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, whenMs, pending)
+        } else {
+            alarm.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, whenMs, pending)
+        }
     }
 
     companion object {
@@ -425,8 +503,6 @@ class ListeningService : Service() {
         private const val SERVICE_NOTIFICATION_ID = 41
         private const val RESULT_ID_START = 100
         private const val RESULT_ID_END = 104
-        private const val WAKE_LOCK_CHUNK_MS = 30 * 60 * 1000L
-        private const val WAKE_REFRESH_MS = 5 * 60 * 1000L
 
         @Volatile
         var isRunning: Boolean = false

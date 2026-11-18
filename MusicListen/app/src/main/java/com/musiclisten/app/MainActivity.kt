@@ -121,12 +121,6 @@ class MainActivity : AppCompatActivity() {
         }
         val goKey = TokenStore.goKey(this)
         if (goKey.isNotBlank()) binding.goKeyInput.setText(goKey)
-        val acr = TokenStore.acr(this)
-        if (acr.accessKey.isNotBlank()) {
-            binding.acrHostInput.setText(acr.host)
-            binding.acrKeyInput.setText(acr.accessKey)
-            binding.acrSecretInput.setText(acr.accessSecret)
-        }
         binding.scanCard.setOnClickListener { chooseCardPhoto() }
 
         val title = ListeningService.lastTitle.ifBlank { Prefs.lastTitle(this) }
@@ -189,7 +183,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         TokenStore.setGoKey(this, binding.goKeyInput.text?.toString().orEmpty())
-        saveAcr()
         runCatching { unregisterReceiver(updates) }
         super.onStop()
     }
@@ -388,7 +381,6 @@ class MainActivity : AppCompatActivity() {
     private fun ensurePermissionsAndStart() {
         val token = binding.tokenInput.text?.toString().orEmpty().trim()
         TokenStore.set(this, token)
-        saveAcr()
         val needed = mutableListOf<String>()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
@@ -421,15 +413,6 @@ class MainActivity : AppCompatActivity() {
                 )
             )
         }
-    }
-
-    private fun saveAcr() {
-        TokenStore.setAcr(
-            this,
-            binding.acrHostInput.text?.toString().orEmpty(),
-            binding.acrKeyInput.text?.toString().orEmpty(),
-            binding.acrSecretInput.text?.toString().orEmpty(),
-        )
     }
 
     private fun startListening() {

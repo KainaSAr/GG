@@ -29,17 +29,7 @@ class AudioMonitor {
             return
         }
         releaseLocked()
-        val created = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            SAMPLE_RATE,
-            CHANNEL,
-            ENCODING,
-            bufferSize,
-        )
-        if (created.state != AudioRecord.STATE_INITIALIZED) {
-            created.release()
-            throw IllegalStateException("Микрофон не запустился")
-        }
+        val created = openRecorder()
         created.startRecording()
         recorder = created
     }
@@ -78,6 +68,19 @@ class AudioMonitor {
         }
         WavWriter.write(file, pcm, SAMPLE_RATE)
         return file
+    }
+
+    private fun openRecorder(): AudioRecord {
+        val sources = intArrayOf(
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            MediaRecorder.AudioSource.MIC,
+        )
+        for (source in sources) {
+            val created = AudioRecord(source, SAMPLE_RATE, CHANNEL, ENCODING, bufferSize)
+            if (created.state == AudioRecord.STATE_INITIALIZED) return created
+            created.release()
+        }
+        throw IllegalStateException("Микрофон не запустился")
     }
 
     private fun releaseLocked() {

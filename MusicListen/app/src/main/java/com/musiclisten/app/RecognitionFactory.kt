@@ -12,14 +12,6 @@ fun buildRecognitionChain(context: Context): RecognitionChain {
             override fun recognize(file: File) = AuddClient(audd).recognize(file)
         }
     }
-    val acr = TokenStore.acr(context)
-    if (acr.configured && !ProviderState.isExhausted(context, "ACRCloud")) {
-        sources += object : SongSource {
-            override val id = "ACRCloud"
-            override fun recognize(file: File) =
-                AcrCloudClient(acr.host, acr.accessKey, acr.accessSecret).recognize(file)
-        }
-    }
     sources += object : SongSource {
         override val id = "Song Finder"
         override fun recognize(file: File) = SongFinderClient().recognize(file)

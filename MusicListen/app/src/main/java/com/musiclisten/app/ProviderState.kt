@@ -25,7 +25,3 @@ object ProviderState {
         }
     }
 }
-
-data class AcrCredentials(val host: String, val accessKey: String, val accessSecret: String) {
-    val configured: Boolean get() = accessKey.isNotBlank() && accessSecret.isNotBlank()
-}
