@@ -6,22 +6,38 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import kotlin.math.max
 
 object CardImage {
-    fun jpegBytes(context: Context, uri: Uri): ByteArray {
-        val resolver = context.contentResolver
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            ?: throw IllegalStateException("Не удалось открыть фото")
+    fun sampleSize(width: Int, height: Int, maxEdge: Int = 1600): Int {
         var sample = 1
-        val longest = max(bounds.outWidth, bounds.outHeight).coerceAtLeast(1)
-        while (longest / sample > 1600) sample *= 2
-        val decoded = resolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
-        } ?: throw IllegalStateException("Не удалось прочитать фото")
-        val rotated = rotate(resolver, uri, decoded)
+        val longest = max(width, height)
+        if (longest <= 0) return 1
+        while (longest / sample > maxEdge) sample *= 2
+        return sample
+    }
+
+    fun jpegBytes(context: Context, uri: Uri): ByteArray {
+        // Copy first. decodeStream returns null when only bounds are requested,
+        // and many gallery streams cannot be rewound.
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: throw IllegalStateException("Не удалось открыть фото")
+        if (bytes.isEmpty()) throw IllegalStateException("Фото пустое")
+
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            throw IllegalStateException("Это не изображение")
+        }
+        val decoded = BitmapFactory.decodeByteArray(
+            bytes,
+            0,
+            bytes.size,
+            BitmapFactory.Options().apply { inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight) },
+        ) ?: throw IllegalStateException("Не удалось прочитать фото")
+        val rotated = rotate(bytes, decoded)
         return try {
             val out = ByteArrayOutputStream()
             var quality = 82
@@ -38,14 +54,10 @@ object CardImage {
         }
     }
 
-    private fun rotate(
-        resolver: android.content.ContentResolver,
-        uri: Uri,
-        bitmap: Bitmap,
-    ): Bitmap {
-        val degrees = resolver.openInputStream(uri)?.use { input ->
+    private fun rotate(bytes: ByteArray, bitmap: Bitmap): Bitmap {
+        val degrees = runCatching {
             when (
-                ExifInterface(input).getAttributeInt(
+                ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(
                     ExifInterface.TAG_ORIENTATION,
                     ExifInterface.ORIENTATION_NORMAL,
                 )
@@ -55,7 +67,7 @@ object CardImage {
                 ExifInterface.ORIENTATION_ROTATE_270 -> 270
                 else -> 0
             }
-        } ?: 0
+        }.getOrDefault(0)
         if (degrees == 0) return bitmap
         val matrix = Matrix().apply { postRotate(degrees.toFloat()) }
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
