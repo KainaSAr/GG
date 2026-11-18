@@ -6,8 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -28,6 +31,7 @@ class MainActivity : AppCompatActivity() {
             true
         }
         if (micOk && notifOk) {
+            maybeRequestBatteryExemption()
             startListening()
         } else {
             Toast.makeText(this, R.string.permission_needed, Toast.LENGTH_LONG).show()
@@ -45,8 +49,6 @@ class MainActivity : AppCompatActivity() {
                     val title = intent.getStringExtra(ListeningService.EXTRA_TITLE).orEmpty()
                     val artist = intent.getStringExtra(ListeningService.EXTRA_ARTIST).orEmpty()
                     binding.lastMessage.text = getString(R.string.last_message_fmt, title, artist)
-                    // Short toast — looks like a normal message, not a recognizer UI.
-                    Toast.makeText(this@MainActivity, "$title — $artist", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -64,12 +66,10 @@ class MainActivity : AppCompatActivity() {
             binding.status.text = getString(R.string.token_missing)
         }
 
-        if (ListeningService.lastTitle.isNotBlank()) {
-            binding.lastMessage.text = getString(
-                R.string.last_message_fmt,
-                ListeningService.lastTitle,
-                ListeningService.lastArtist,
-            )
+        val title = ListeningService.lastTitle.ifBlank { Prefs.lastTitle(this) }
+        val artist = ListeningService.lastArtist.ifBlank { Prefs.lastArtist(this) }
+        if (title.isNotBlank()) {
+            binding.lastMessage.text = getString(R.string.last_message_fmt, title, artist)
         }
 
         binding.toggleButton.setOnClickListener {
@@ -81,6 +81,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
         refreshToggle()
+
+        // Resume always-on after process death if user had it enabled.
+        if (Prefs.wantRunning(this) &&
+            !ListeningService.isRunning &&
+            TokenStore.get(this).isNotBlank() &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            ListeningService.start(this)
+        }
     }
 
     override fun onStart() {
@@ -118,28 +128,45 @@ class MainActivity : AppCompatActivity() {
             needed += Manifest.permission.POST_NOTIFICATIONS
         }
         if (needed.isEmpty()) {
+            maybeRequestBatteryExemption()
             startListening()
         } else {
             permissionLauncher.launch(needed.toTypedArray())
         }
     }
 
+    private fun maybeRequestBatteryExemption() {
+        val pm = getSystemService(PowerManager::class.java)
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+        Toast.makeText(this, R.string.battery_hint, Toast.LENGTH_LONG).show()
+        runCatching {
+            startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:$packageName"),
+                )
+            )
+        }
+    }
+
     private fun startListening() {
+        Prefs.setWantRunning(this, true)
         ListeningService.start(this)
         refreshToggle()
     }
 
     private fun refreshToggle() {
-        val running = ListeningService.isRunning
-        binding.toggleButton.text = getString(if (running) R.string.stop else R.string.start)
-        binding.toggleButton.setBackgroundResource(
-            if (running) R.drawable.bg_button_stop else R.drawable.bg_button
+        binding.toggleButton.text = getString(
+            if (ListeningService.isRunning) R.string.stop else R.string.start
         )
-        if (running && binding.status.text.isNullOrBlank()) {
-            binding.status.text = getString(R.string.status_listening)
-        }
-        if (!running) {
+        binding.toggleButton.setBackgroundResource(
+            if (ListeningService.isRunning) R.drawable.bg_button_stop else R.drawable.bg_button
+        )
+        if (!ListeningService.isRunning && !Prefs.wantRunning(this)) {
             binding.status.text = getString(R.string.status_stopped)
+        } else if (ListeningService.isRunning && binding.status.text.isNullOrBlank()) {
+            binding.status.text = getString(R.string.status_watching)
         }
     }
 }
+
