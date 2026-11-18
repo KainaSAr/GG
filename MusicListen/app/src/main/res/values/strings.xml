@@ -7,6 +7,14 @@
     <string name="permission_needed">Нужен доступ к микрофону</string>
     <string name="token_missing">Сначала вставь токен AudD (dashboard.audd.io)</string>
     <string name="token_hint">Токен AudD</string>
+    <string name="go_key_hint">Ключ OpenCode Go</string>
+    <string name="scan_card">Считать бланк с фото</string>
+    <string name="scan_camera">Камера</string>
+    <string name="scan_gallery">Галерея</string>
+    <string name="go_key_missing">Вставь ключ OpenCode Go — без него фото бланка не прочитать</string>
+    <string name="scanning_card">Читаю бланк…</string>
+    <string name="card_ready">Бланк %1$d×%1$d, песен: %2$d</string>
+    <string name="camera_needed">Нужен доступ к камере</string>
     <string name="status_listening">Слушаю…</string>
     <string name="status_watching">Жду музыку, без запросов в API…</string>
     <string name="status_music_nearby">Похоже на музыку (%1$s%%)</string>

@@ -68,6 +68,17 @@ object TicketStore {
         prefs(context).edit().putInt(KEY_GOAL, target.ordinal).apply()
     }
 
+    fun replaceCard(context: Context, size: Int, cells: List<String>) {
+        val next = size.coerceIn(4, 6)
+        val count = next * next
+        val fresh = List(count) { cells.getOrElse(it) { "" }.trim() }
+        prefs(context).edit()
+            .putInt(KEY_SIZE, next)
+            .putString(KEY_CELLS, JSONArray(fresh).toString())
+            .putString(KEY_MARKS, emptyMarks(count))
+            .apply()
+    }
+
     fun clearMarks(context: Context) {
         val count = gridSize(context) * gridSize(context)
         prefs(context).edit().putString(KEY_MARKS, emptyMarks(count)).apply()

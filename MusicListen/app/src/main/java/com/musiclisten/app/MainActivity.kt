@@ -21,9 +21,18 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.musiclisten.app.databinding.ActivityMainBinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -32,6 +41,30 @@ class MainActivity : AppCompatActivity() {
     private val cellEdits = mutableListOf<EditText>()
     private var buildingGrid = false
     private var latestAnswer: String = ""
+    private val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var cameraUri: Uri? = null
+    private var scanning = false
+
+    private val cameraPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) launchCamera() else {
+            Toast.makeText(this, R.string.camera_needed, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val takePicture = registerForActivityResult(
+        ActivityResultContracts.TakePicture(),
+    ) { saved ->
+        val uri = cameraUri
+        if (saved && uri != null) readCard(uri)
+    }
+
+    private val pickImage = registerForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri != null) readCard(uri)
+    }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -86,6 +119,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             binding.status.text = getString(R.string.token_missing)
         }
+        val goKey = TokenStore.goKey(this)
+        if (goKey.isNotBlank()) binding.goKeyInput.setText(goKey)
+        binding.scanCard.setOnClickListener { chooseCardPhoto() }
 
         val title = ListeningService.lastTitle.ifBlank { Prefs.lastTitle(this) }
         val artist = ListeningService.lastArtist.ifBlank { Prefs.lastArtist(this) }
@@ -146,8 +182,83 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        TokenStore.setGoKey(this, binding.goKeyInput.text?.toString().orEmpty())
         runCatching { unregisterReceiver(updates) }
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        uiScope.cancel()
+        super.onDestroy()
+    }
+
+    private fun chooseCardPhoto() {
+        val key = binding.goKeyInput.text?.toString().orEmpty().trim()
+        if (key.isBlank()) {
+            Toast.makeText(this, R.string.go_key_missing, Toast.LENGTH_LONG).show()
+            return
+        }
+        TokenStore.setGoKey(this, key)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.scan_card)
+            .setItems(arrayOf(getString(R.string.scan_camera), getString(R.string.scan_gallery))) { _, which ->
+                if (which == 0) {
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        launchCamera()
+                    } else {
+                        cameraPermission.launch(Manifest.permission.CAMERA)
+                    }
+                } else {
+                    pickImage.launch("image/*")
+                }
+            }
+            .show()
+    }
+
+    private fun launchCamera() {
+        val dir = File(cacheDir, "cards").apply { mkdirs() }
+        val file = File(dir, "card.jpg")
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+        cameraUri = uri
+        takePicture.launch(uri)
+    }
+
+    private fun readCard(uri: Uri) {
+        if (scanning) return
+        val key = binding.goKeyInput.text?.toString().orEmpty().trim()
+        if (key.isBlank()) {
+            Toast.makeText(this, R.string.go_key_missing, Toast.LENGTH_LONG).show()
+            return
+        }
+        scanning = true
+        binding.scanCard.isEnabled = false
+        binding.status.text = getString(R.string.scanning_card)
+        uiScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    val jpeg = CardImage.jpegBytes(this@MainActivity, uri)
+                    CardVisionClient(key, TokenStore.goSession(this@MainActivity)).readCard(jpeg)
+                }
+            }
+            scanning = false
+            binding.scanCard.isEnabled = true
+            result.onSuccess { draft ->
+                TicketStore.replaceCard(this@MainActivity, draft.size, draft.cells)
+                buildGrid()
+                val filled = draft.cells.count { it.isNotBlank() }
+                binding.lastMessage.text = getString(R.string.card_ready, draft.size, filled)
+                binding.status.text = getString(R.string.status_stopped)
+            }.onFailure { error ->
+                binding.status.text = error.message ?: getString(R.string.status_error)
+                Toast.makeText(
+                    this@MainActivity,
+                    error.message ?: getString(R.string.status_error),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
     }
 
     private fun changeSize(size: Int) {
