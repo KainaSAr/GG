@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Listen</string>
+    <string name="subtitle">Results arrive as a short message notification — not a full-screen flash.</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="permission_needed">Microphone permission is required</string>
+    <string name="token_missing">Paste your AudD API token first (dashboard.audd.io)</string>
+    <string name="token_hint">AudD API token</string>
+    <string name="status_listening">Listening…</string>
+    <string name="status_stopped">Stopped</string>
+    <string name="status_identifying">Checking…</string>
+    <string name="status_error">No match</string>
+    <string name="last_message_empty">Last result will show here as a plain message.</string>
+    <string name="last_message_fmt">%1$s\n%2$s</string>
+    <string name="hint">Android always shows a quiet ongoing notification while the mic is active. Matches appear as a normal message: track + artist.</string>
+    <string name="service_channel">Background</string>
+    <string name="service_channel_desc">Quiet indicator while listening</string>
+    <string name="service_title">Listen</string>
+    <string name="service_text">Active</string>
+    <string name="result_channel">Messages</string>
+    <string name="result_channel_desc">Track matches as short messages</string>
+</resources>

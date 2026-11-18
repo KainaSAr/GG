@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ink">#12151A</color>
+    <color name="ink_soft">#2A313C</color>
+    <color name="fog">#E8EDF2</color>
+    <color name="mist">#F4F7FA</color>
+    <color name="accent">#0F7B6C</color>
+    <color name="accent_dim">#0A5A4F</color>
+    <color name="line">#CBD5E1</color>
+    <color name="danger">#B42318</color>
+    <color name="white">#FFFFFF</color>
+</resources>
