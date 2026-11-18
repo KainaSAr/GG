@@ -8,6 +8,10 @@
     <string name="token_missing">Сначала вставь токен AudD (dashboard.audd.io)</string>
     <string name="token_hint">Токен AudD</string>
     <string name="go_key_hint">Ключ OpenCode Go</string>
+    <string name="acr_host_hint">ACRCloud host</string>
+    <string name="acr_key_hint">ACRCloud access key</string>
+    <string name="acr_secret_hint">ACRCloud access secret</string>
+    <string name="provider_links">Сначала AudD (300 бесплатно, потом $5/1000): https://dashboard.audd.io\nЕсли лимит кончился — ACRCloud, 14 дней пробных: https://console.acrcloud.com/signup\nДальше Song Finder, без регистрации: https://songfinder.dev</string>
     <string name="scan_card">Считать бланк с фото</string>
     <string name="scan_camera">Камера</string>
     <string name="scan_gallery">Галерея</string>

@@ -7,9 +7,13 @@ object AuddResponseParser {
         val root = JSONObject(raw)
         if (root.optString("status") != "success") {
             val error = root.optJSONObject("error")
+            val code = error?.optInt("error_code", -1) ?: -1
             val message = error?.optString("error_message")
                 ?.takeIf { it.isNotBlank() }
                 ?: root.toString()
+            if (code == 901 || code == 902 || code == 903) {
+                throw ProviderQuotaException("AudD", message)
+            }
             throw IllegalStateException(message)
         }
         if (root.isNull("result")) return null

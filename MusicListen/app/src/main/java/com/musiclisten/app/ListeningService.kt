@@ -37,7 +37,7 @@ class ListeningService : Service() {
     private var lastAnswerLine: String? = null
     private var nextResultId = RESULT_ID_START
 
-    private fun audd(): AuddClient = AuddClient(TokenStore.get(this))
+    private fun chain(): RecognitionChain = buildRecognitionChain(this)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -126,10 +126,13 @@ class ListeningService : Service() {
                     updateServiceText(getString(R.string.service_text_identifying))
 
                     val wav = File(cacheDir, "snippet_${System.currentTimeMillis()}.wav")
+                    var providerName = ""
                     val result = try {
                         withContext(Dispatchers.IO) {
                             monitor.captureWav(wav, ListenTiming.CAPTURE_MS)
-                            audd().recognize(wav)
+                            val recognition = chain().recognize(wav)
+                            providerName = recognition.provider
+                            recognition.track
                         }
                     } finally {
                         wav.delete()
@@ -166,7 +169,10 @@ class ListeningService : Service() {
 
                         nextApiAllowedAt =
                             System.currentTimeMillis() + ListenTiming.COOLDOWN_AFTER_MATCH_MS
-                        sendStatus(getString(R.string.status_matched, result.title, result.artist))
+                        sendStatus(
+                            getString(R.string.status_matched, result.title, result.artist) +
+                                " · " + providerName
+                        )
                         showIdleOrAnswer()
                     } else {
                         nextApiAllowedAt =

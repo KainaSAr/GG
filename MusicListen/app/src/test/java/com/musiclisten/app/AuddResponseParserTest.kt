@@ -30,6 +30,17 @@ class AuddResponseParserTest {
     }
 
     @Test
+    fun quotaSwitchesProvider() {
+        val raw = """
+            {"status":"error","error":{"error_code":902,"error_message":"quota"}}
+        """.trimIndent()
+        val ex = assertThrows(ProviderQuotaException::class.java) {
+            AuddResponseParser.parse(raw)
+        }
+        assertEquals("AudD", ex.provider)
+    }
+
+    @Test
     fun errorStatusThrows() {
         val raw = """
             {"status":"error","error":{"error_code":900,"error_message":"bad token"}}
