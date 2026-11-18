@@ -42,44 +42,25 @@ object TicketMatcher {
     }
 
     internal fun score(cell: String, title: String, artist: String, combo: String): Double {
-        if (cell.isEmpty()) return 0.0
-        if (cell == title || cell == artist || cell == combo) return 1.0
-        if (cell.length >= 4 && (combo.contains(cell) || (title.isNotEmpty() && title.contains(cell)))) {
-            return 0.95
-        }
-        if (title.length >= 4 && cell.contains(title)) return 0.92
+        if (cell.isEmpty() || title.isEmpty()) return 0.0
+        if (cell == title || cell == combo || cell == "$title $artist".trim()) return 1.0
 
-        val cellTokens = tokens(cell)
-        val trackTokens = tokens("$title $artist")
-        if (cellTokens.isEmpty() || trackTokens.isEmpty()) return ratio(cell, title)
+        val cellTokens = longTokens(cell)
+        val titleTokens = longTokens(title)
+        val trackTokens = longTokens("$title $artist")
+        if (cellTokens.isEmpty() || titleTokens.isEmpty()) return 0.0
 
-        val shared = cellTokens.intersect(trackTokens)
-        if (shared.isEmpty() || shared.none { it.length >= 4 }) return ratio(cell, title) * 0.5
-        val coverage = shared.size.toDouble() / cellTokens.size
-        val jaccard = shared.size.toDouble() / cellTokens.union(trackTokens).size
-        return maxOf(coverage * 0.82 + jaccard * 0.18, ratio(cell, title))
+        // Every meaningful word on the card cell must belong to this track,
+        // otherwise "Звезда" would mark "Звезда по имени Солнце".
+        if (!cellTokens.all { it in trackTokens }) return 0.0
+        if (titleTokens.all { it in cellTokens }) return 1.0
+
+        val titleHits = cellTokens.count { it in titleTokens }
+        if (titleHits == 0) return 0.0
+        val coverage = titleHits.toDouble() / cellTokens.size
+        return if (coverage >= 0.8) 0.86 else 0.0
     }
 
-    private fun tokens(text: String): Set<String> =
-        text.split(' ').filter { it.length >= 3 }.toSet()
-
-    private fun ratio(a: String, b: String): Double {
-        if (a.isEmpty() || b.isEmpty()) return 0.0
-        val dist = levenshtein(a, b)
-        return 1.0 - dist.toDouble() / maxOf(a.length, b.length)
-    }
-
-    private fun levenshtein(a: String, b: String): Int {
-        val prev = IntArray(b.length + 1) { it }
-        val cur = IntArray(b.length + 1)
-        for (i in a.indices) {
-            cur[0] = i + 1
-            for (j in b.indices) {
-                val cost = if (a[i] == b[j]) 0 else 1
-                cur[j + 1] = minOf(cur[j] + 1, prev[j + 1] + 1, prev[j] + cost)
-            }
-            for (j in prev.indices) prev[j] = cur[j]
-        }
-        return prev[b.length]
-    }
+    private fun longTokens(text: String): Set<String> =
+        text.split(' ').filter { it.length >= 4 }.toSet()
 }

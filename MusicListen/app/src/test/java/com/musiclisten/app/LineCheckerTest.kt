@@ -53,6 +53,28 @@ class LineCheckerTest {
     }
 
     @Test
+    fun blankCellDoesNotCompleteALineOrFullCard() {
+        val marked = BooleanArray(16) { it < 4 }
+        val filled = BooleanArray(16) { it != 3 }
+        assertTrue(LineChecker.winningLines(4, marked, filled).isEmpty())
+        assertTrue(!LineChecker.goalReached(4, marked, WinTarget.FULL_CARD, filled))
+        for (i in 0 until 3) marked[i] = true
+        val onlyThree = BooleanArray(16) { it < 3 }
+        assertTrue(LineChecker.goalReached(4, marked, WinTarget.FULL_CARD, onlyThree))
+    }
+
+    @Test
+    fun prefersTheLineThatContainsTheNewCell() {
+        val marked = BooleanArray(16)
+        for (i in 0 until 4) marked[i] = true
+        marked[4] = true
+        marked[8] = true
+        marked[12] = true
+        val filled = BooleanArray(16) { true }
+        assertEquals(listOf(0, 4, 8, 12), LineChecker.lineContaining(4, marked, filled, 12))
+    }
+
+    @Test
     fun labelUsesCellText() {
         val cells = listOf("A", "B", "C", "D")
         assertEquals("A · B", LineChecker.label(cells, listOf(0, 1)))

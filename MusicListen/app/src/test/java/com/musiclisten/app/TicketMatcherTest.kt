@@ -48,6 +48,24 @@ class TicketMatcherTest {
     }
 
     @Test
+    fun shortTitleDoesNotMarkALongerSong() {
+        assertNull(
+            TicketMatcher.match("Звезда", "Другая группа", listOf("Звезда по имени Солнце")),
+        )
+    }
+
+    @Test
+    fun liveSuffixStillMatchesTheCardTitle() {
+        val hit = TicketMatcher.match("Группа крови (Live)", "Кино", listOf("Группа крови"))
+        assertEquals(0, hit!!.index)
+    }
+
+    @Test
+    fun artistAloneDoesNotMarkEverySong() {
+        assertNull(TicketMatcher.match("Кукушка", "Кино", listOf("Кино")))
+    }
+
+    @Test
     fun normalizesPunctuation() {
         assertEquals("yesterday", TicketMatcher.normalize("Yesterday!"))
         assertEquals("царица", TicketMatcher.normalize("Царица —"))

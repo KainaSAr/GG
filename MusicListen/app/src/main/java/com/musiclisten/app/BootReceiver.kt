@@ -8,13 +8,16 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return
         if (action != Intent.ACTION_BOOT_COMPLETED &&
-            action != Intent.ACTION_LOCKED_BOOT_COMPLETED &&
             action != Intent.ACTION_MY_PACKAGE_REPLACED
         ) {
             return
         }
-        if (Prefs.wantRunning(context) && TokenStore.get(context).isNotBlank()) {
-            ListeningService.start(context.applicationContext)
+        val app = context.applicationContext
+        val shouldStart = runCatching {
+            Prefs.wantRunning(app) && TokenStore.get(app).isNotBlank()
+        }.getOrDefault(false)
+        if (shouldStart) {
+            runCatching { ListeningService.start(app) }
         }
     }
 }

@@ -4,14 +4,11 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import java.io.File
-import java.io.FileOutputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.math.max
 
 /**
- * Keeps a single AudioRecord session for continuous local probing and
- * occasional longer captures for recognition.
+ * Keeps one microphone session for short local probes and recognition captures.
+ * All access is serialized so a stop cannot release the recorder mid-read.
  */
 class AudioMonitor {
     private var recorder: AudioRecord? = null
@@ -31,7 +28,7 @@ class AudioMonitor {
             }
             return
         }
-        release()
+        releaseLocked()
         val created = AudioRecord(
             MediaRecorder.AudioSource.MIC,
             SAMPLE_RATE,
@@ -41,7 +38,7 @@ class AudioMonitor {
         )
         if (created.state != AudioRecord.STATE_INITIALIZED) {
             created.release()
-            throw IllegalStateException("AudioRecord failed to initialize")
+            throw IllegalStateException("Микрофон не запустился")
         }
         created.startRecording()
         recorder = created
@@ -49,61 +46,45 @@ class AudioMonitor {
 
     @Synchronized
     fun release() {
-        val current = recorder ?: return
-        recorder = null
-        runCatching { current.stop() }
-        runCatching { current.release() }
+        releaseLocked()
     }
 
+    @Synchronized
     fun readPcm(durationMs: Long): ShortArray {
         ensureStarted()
-        val rec = recorder ?: throw IllegalStateException("recorder missing")
+        val rec = recorder ?: throw IllegalStateException("Микрофон не запущен")
         val samplesNeeded = ((SAMPLE_RATE * durationMs) / 1000L).toInt().coerceAtLeast(1)
         val out = ShortArray(samplesNeeded)
         var offset = 0
-        val endAt = System.currentTimeMillis() + durationMs + 250
+        val endAt = System.currentTimeMillis() + durationMs + 400
         while (offset < samplesNeeded && System.currentTimeMillis() < endAt) {
             val read = rec.read(out, offset, samplesNeeded - offset)
             when {
                 read > 0 -> offset += read
-                read == AudioRecord.ERROR_INVALID_OPERATION ||
-                    read == AudioRecord.ERROR_BAD_VALUE -> {
-                    throw IllegalStateException("AudioRecord read error: $read")
-                }
+                read < 0 -> throw IllegalStateException("Сбой микрофона: $read")
             }
+        }
+        if (offset < samplesNeeded * 8 / 10) {
+            throw IllegalStateException("Слишком короткая запись: $offset/$samplesNeeded")
         }
         return if (offset == samplesNeeded) out else out.copyOf(offset)
     }
 
+    @Synchronized
     fun captureWav(file: File, durationMs: Long): File {
         val pcm = readPcm(durationMs)
-        writeWav(file, pcm)
+        if (pcm.size < SAMPLE_RATE) {
+            throw IllegalStateException("Запись короче секунды, в API не отправляю")
+        }
+        WavWriter.write(file, pcm, SAMPLE_RATE)
         return file
     }
 
-    private fun writeWav(file: File, pcm: ShortArray) {
-        val dataSize = pcm.size * 2
-        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
-        header.put("RIFF".toByteArray(Charsets.US_ASCII))
-        header.putInt(dataSize + 36)
-        header.put("WAVE".toByteArray(Charsets.US_ASCII))
-        header.put("fmt ".toByteArray(Charsets.US_ASCII))
-        header.putInt(16)
-        header.putShort(1)
-        header.putShort(1)
-        header.putInt(SAMPLE_RATE)
-        header.putInt(SAMPLE_RATE * 2)
-        header.putShort(2)
-        header.putShort(16)
-        header.put("data".toByteArray(Charsets.US_ASCII))
-        header.putInt(dataSize)
-
-        FileOutputStream(file).use { out ->
-            out.write(header.array())
-            val bytes = ByteBuffer.allocate(dataSize).order(ByteOrder.LITTLE_ENDIAN)
-            pcm.forEach { bytes.putShort(it) }
-            out.write(bytes.array())
-        }
+    private fun releaseLocked() {
+        val current = recorder ?: return
+        recorder = null
+        runCatching { current.stop() }
+        runCatching { current.release() }
     }
 
     companion object {

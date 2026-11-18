@@ -31,6 +31,11 @@ class ListeningService : Service() {
     private val monitor = AudioMonitor()
     private val detector = MusicPresenceDetector()
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wakeRefreshAt = 0L
+    private var shownServiceText: String? = null
+    private var lastStatus: String? = null
+    private var lastAnswerLine: String? = null
+    private var nextResultId = RESULT_ID_START
 
     private fun audd(): AuddClient = AuddClient(TokenStore.get(this))
 
@@ -96,7 +101,7 @@ class ListeningService : Service() {
                             nextApiAllowedAt = 0L
                         }
                         sendStatus(getString(R.string.status_watching))
-                        updateServiceText(getString(R.string.service_text_watching))
+                        showIdleOrAnswer()
                         delay(ListenTiming.PROBE_GAP_MS)
                         continue
                     }
@@ -106,7 +111,7 @@ class ListeningService : Service() {
                     sendStatus(
                         getString(R.string.status_music_nearby, "%.0f".format(verdict.score * 100))
                     )
-                    updateServiceText(getString(R.string.service_text_music))
+                    showIdleOrAnswer()
 
                     val now = System.currentTimeMillis()
                     if (musicStreak < ListenTiming.REQUIRED_MUSIC_STREAK || now < nextApiAllowedAt) {
@@ -140,11 +145,16 @@ class ListeningService : Service() {
                         if (!recentlySame) {
                             val event = applyToTicket(result)
                             val answer = AnswerFormat.headline(result.title, result.artist)
+                            lastAnswerLine = answer
                             when (event) {
-                                is TicketEvent.Line -> showLineMessage(answer, event.label)
-                                is TicketEvent.Cell -> showCellMessage(event.label, result.title, result.artist)
-                                TicketEvent.NoCard, TicketEvent.Miss -> showTrackMessage(result)
-                                TicketEvent.Already -> Unit
+                                is TicketEvent.Line -> publishAnswer(
+                                    title = getString(R.string.line_notification_title),
+                                    body = "$answer\n${event.label}",
+                                    vibrate = true,
+                                )
+                                is TicketEvent.Cell -> publishAnswer(answer, event.label, vibrate = false)
+                                TicketEvent.NoCard, TicketEvent.Miss -> publishAnswer(answer, result.title, vibrate = false)
+                                TicketEvent.Already -> updateServiceText(answer)
                             }
                             sendTrack(result, event)
                             lastNotifiedKey = key
@@ -154,18 +164,18 @@ class ListeningService : Service() {
                         nextApiAllowedAt =
                             System.currentTimeMillis() + ListenTiming.COOLDOWN_AFTER_MATCH_MS
                         sendStatus(getString(R.string.status_matched, result.title, result.artist))
-                        updateServiceText(getString(R.string.service_text_watching))
+                        showIdleOrAnswer()
                     } else {
                         nextApiAllowedAt =
                             System.currentTimeMillis() + ListenTiming.COOLDOWN_AFTER_MISS_MS
                         sendStatus(getString(R.string.status_error))
-                        updateServiceText(getString(R.string.service_text_watching))
+                        showIdleOrAnswer()
                     }
                 } catch (t: Throwable) {
                     nextApiAllowedAt =
                         System.currentTimeMillis() + ListenTiming.COOLDOWN_AFTER_ERROR_MS
                     sendStatus(t.message ?: getString(R.string.status_error))
-                    updateServiceText(getString(R.string.service_text_watching))
+                    showIdleOrAnswer()
                     runCatching {
                         withContext(Dispatchers.IO) {
                             monitor.release()
@@ -181,17 +191,15 @@ class ListeningService : Service() {
     }
 
     private fun promoteForeground() {
-        val notification = buildQuietServiceNotification(getString(R.string.service_text_watching))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceCompat.startForeground(
-                this,
-                SERVICE_NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
-            )
+        val text = lastAnswerLine ?: getString(R.string.service_text_watching)
+        shownServiceText = text
+        val notification = buildQuietServiceNotification(text)
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         } else {
-            startForeground(SERVICE_NOTIFICATION_ID, notification)
+            0
         }
+        ServiceCompat.startForeground(this, SERVICE_NOTIFICATION_ID, notification, type)
     }
 
     private fun acquireWakeLock() {
@@ -204,12 +212,14 @@ class ListeningService : Service() {
     }
 
     private fun refreshWakeLock() {
+        val now = System.currentTimeMillis()
+        if (wakeLock?.isHeld == true && now < wakeRefreshAt) return
+        wakeRefreshAt = now + WAKE_REFRESH_MS
         val lock = wakeLock
         if (lock == null || !lock.isHeld) {
             acquireWakeLock()
             return
         }
-        // Re-acquire in chunks so always-on does not die after a single timeout.
         runCatching {
             lock.acquire(WAKE_LOCK_CHUNK_MS)
         }.onFailure {
@@ -231,13 +241,14 @@ class ListeningService : Service() {
         val hit = TicketMatcher.match(result.title, result.artist, cells) ?: return TicketEvent.Miss
         val size = TicketStore.gridSize(this)
         val target = TicketStore.goal(this)
+        val filled = BooleanArray(cells.size) { cells[it].isNotBlank() }
         val before = TicketStore.marks(this)
         val already = before.getOrElse(hit.index) { false }
-        val metBefore = LineChecker.goalReached(size, before, target)
+        val metBefore = LineChecker.goalReached(size, before, target, filled)
         if (!already) TicketStore.setMarked(this, hit.index, true)
         val after = TicketStore.marks(this)
-        if (!already && !metBefore && LineChecker.goalReached(size, after, target)) {
-            val line = LineChecker.winningLines(size, after).firstOrNull()
+        if (!already && !metBefore && LineChecker.goalReached(size, after, target, filled)) {
+            val line = LineChecker.lineContaining(size, after, filled, hit.index)
             val names = if (line != null) LineChecker.label(cells, line) else cells[hit.index]
             return TicketEvent.Line(hit.index, names)
         }
@@ -245,23 +256,16 @@ class ListeningService : Service() {
         return TicketEvent.Already
     }
 
-    private fun showCellMessage(cellLabel: String, title: String, artist: String) {
-        notifyResult(
-            title = AnswerFormat.headline(title, artist),
-            body = cellLabel,
-            alert = false,
-        )
+    private fun publishAnswer(title: String, body: String, vibrate: Boolean) {
+        notifyResult(title, body, vibrate)
+        updateServiceText(if (vibrate) "$title · $body" else title)
     }
 
-    private fun showLineMessage(answer: String, lineLabel: String) {
-        notifyResult(
-            title = getString(R.string.line_notification_title),
-            body = "$answer\n$lineLabel",
-            alert = true,
-        )
+    private fun showIdleOrAnswer() {
+        updateServiceText(lastAnswerLine ?: getString(R.string.service_text_watching))
     }
 
-    private fun notifyResult(title: String, body: String, alert: Boolean) {
+    private fun notifyResult(title: String, body: String, vibrate: Boolean) {
         val nm = getSystemService(NotificationManager::class.java)
         val open = PendingIntent.getActivity(
             this,
@@ -276,36 +280,14 @@ class ListeningService : Service() {
             .setStyle(NotificationCompat.BigTextStyle().bigText("$title\n$body"))
             .setContentIntent(open)
             .setAutoCancel(true)
-            .setOnlyAlertOnce(!alert)
-            .setPriority(
-                if (alert) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT
-            )
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .build()
-        nm.notify(RESULT_NOTIFICATION_ID, notification)
-    }
-
-    private fun showTrackMessage(result: TrackResult) {
-        val nm = getSystemService(NotificationManager::class.java)
-        val open = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val headline = AnswerFormat.headline(result.title, result.artist)
-        val notification = NotificationCompat.Builder(this, RESULT_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_note)
-            .setContentTitle(headline)
-            .setContentText(result.title)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(headline))
-            .setContentIntent(open)
-            .setAutoCancel(true)
-            .setOnlyAlertOnce(true)
+            .setOnlyAlertOnce(false)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVibrate(if (vibrate) longArrayOf(0, 140, 70, 140) else longArrayOf(0))
             .build()
-        nm.notify(RESULT_NOTIFICATION_ID, notification)
+        val id = nextResultId
+        nextResultId = if (nextResultId >= RESULT_ID_END) RESULT_ID_START else nextResultId + 1
+        nm.notify(id, notification)
     }
 
     private fun buildQuietServiceNotification(text: String): Notification {
@@ -327,6 +309,8 @@ class ListeningService : Service() {
     }
 
     private fun updateServiceText(text: String) {
+        if (text == shownServiceText) return
+        shownServiceText = text
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(SERVICE_NOTIFICATION_ID, buildQuietServiceNotification(text))
     }
@@ -347,14 +331,17 @@ class ListeningService : Service() {
             NotificationChannel(
                 RESULT_CHANNEL_ID,
                 getString(R.string.result_channel),
-                NotificationManager.IMPORTANCE_DEFAULT,
+                NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = getString(R.string.result_channel_desc)
+                enableVibration(true)
             },
         )
     }
 
     private fun sendStatus(text: String) {
+        if (text == lastStatus) return
+        lastStatus = text
         sendBroadcast(
             Intent(ACTION_STATUS).setPackage(packageName).putExtra(EXTRA_STATUS, text)
         )
@@ -385,7 +372,7 @@ class ListeningService : Service() {
         releaseWakeLock()
         isRunning = false
         sendStatus(getString(R.string.status_stopped))
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
         stopSelf()
     }
 
@@ -418,10 +405,12 @@ class ListeningService : Service() {
         }
 
         private const val SERVICE_CHANNEL_ID = "quiet_service"
-        private const val RESULT_CHANNEL_ID = "track_message"
+        private const val RESULT_CHANNEL_ID = "track_message_v2"
         private const val SERVICE_NOTIFICATION_ID = 41
-        private const val RESULT_NOTIFICATION_ID = 42
+        private const val RESULT_ID_START = 100
+        private const val RESULT_ID_END = 104
         private const val WAKE_LOCK_CHUNK_MS = 30 * 60 * 1000L
+        private const val WAKE_REFRESH_MS = 5 * 60 * 1000L
 
         @Volatile
         var isRunning: Boolean = false

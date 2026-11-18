@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private val cellRoots = mutableListOf<View>()
     private val cellEdits = mutableListOf<EditText>()
     private var buildingGrid = false
+    private var latestAnswer: String = ""
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -62,6 +63,7 @@ class MainActivity : AppCompatActivity() {
                     val cell = intent.getIntExtra(ListeningService.EXTRA_CELL, -1)
                     val line = intent.getStringExtra(ListeningService.EXTRA_LINE).orEmpty()
                     val answer = AnswerFormat.headline(title, artist)
+                    latestAnswer = answer
                     binding.lastMessage.text = when {
                         line.isNotBlank() -> getString(R.string.line_ready, "$answer\n$line")
                         cell >= 0 -> getString(R.string.mark_cell, answer)
@@ -98,7 +100,7 @@ class MainActivity : AppCompatActivity() {
         binding.goalThree.setOnClickListener { setGoal(WinTarget.THREE_LINES) }
         binding.goalFull.setOnClickListener { setGoal(WinTarget.FULL_CARD) }
         binding.copyAnswer.setOnClickListener {
-            val text = binding.lastMessage.text?.toString().orEmpty()
+            val text = latestAnswer.ifBlank { binding.lastMessage.text?.toString().orEmpty() }
             val clipboard = getSystemService(ClipboardManager::class.java)
             clipboard.setPrimaryClip(ClipData.newPlainText("answer", text))
             Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show()
@@ -188,6 +190,7 @@ class MainActivity : AppCompatActivity() {
                 toggle.setOnClickListener {
                     TicketStore.setMarked(this, index, !TicketStore.isMarked(this, index))
                     refreshMarks()
+                    announceIfGoalMet()
                 }
                 cellRoots += cell
                 cellEdits += edit
@@ -223,11 +226,35 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun cardFilled(): BooleanArray {
+        val cells = TicketStore.cells(this)
+        return BooleanArray(cells.size) { cells[it].isNotBlank() }
+    }
+
+    private fun announceIfGoalMet() {
+        val size = TicketStore.gridSize(this)
+        val cells = TicketStore.cells(this)
+        val marks = TicketStore.marks(this)
+        val filled = cardFilled()
+        val goal = TicketStore.goal(this)
+        if (!LineChecker.goalReached(size, marks, goal, filled)) return
+        val line = LineChecker.winningLines(size, marks, filled).firstOrNull()
+        val label = if (line != null) LineChecker.label(cells, line) else ""
+        binding.lastMessage.text = getString(R.string.line_ready, label.ifBlank { getString(R.string.goal_full) })
+    }
+
     private fun refreshMarks() {
         if (cellRoots.isEmpty()) return
         val size = TicketStore.gridSize(this)
         val marks = TicketStore.marks(this)
-        val winning = LineChecker.winningLines(size, marks).flatten().toSet()
+        val filled = cardFilled()
+        val goal = TicketStore.goal(this)
+        val won = LineChecker.goalReached(size, marks, goal, filled)
+        val winning = when {
+            !won -> emptySet()
+            goal == WinTarget.FULL_CARD -> filled.indices.filter { filled[it] && marks[it] }.toSet()
+            else -> LineChecker.winningLines(size, marks, filled).flatten().toSet()
+        }
         cellRoots.forEachIndexed { index, view ->
             val background = when {
                 index in winning -> R.drawable.bg_cell_line
