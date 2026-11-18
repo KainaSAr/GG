@@ -91,10 +91,9 @@ class ListeningService : Service() {
                     if (!verdict.isMusicLikely) {
                         musicStreak = 0
                         quietStreak++
-                        if (quietStreak == 4 && nextApiAllowedAt > 0L) {
-                            val softened =
-                                System.currentTimeMillis() + ListenTiming.QUIET_SOFTEN_COOLDOWN_MS
-                            if (softened < nextApiAllowedAt) nextApiAllowedAt = softened
+                        // Host pauses between 15–30s clips. Drop the cooldown so the next song is eligible.
+                        if (quietStreak >= ListenTiming.QUIET_RESET_STREAK) {
+                            nextApiAllowedAt = 0L
                         }
                         sendStatus(getString(R.string.status_watching))
                         updateServiceText(getString(R.string.service_text_watching))
@@ -103,7 +102,7 @@ class ListeningService : Service() {
                     }
 
                     quietStreak = 0
-                    musicStreak++
+                    musicStreak += if (verdict.score >= ListenTiming.STRONG_PROBE_SCORE) 2 else 1
                     sendStatus(
                         getString(R.string.status_music_nearby, "%.0f".format(verdict.score * 100))
                     )
@@ -139,8 +138,15 @@ class ListeningService : Service() {
                         val recentlySame =
                             key == lastNotifiedKey && now - lastNotifiedAt < ListenTiming.SAME_TRACK_SUPPRESS_MS
                         if (!recentlySame) {
-                            showTrackMessage(result)
-                            sendTrack(result)
+                            val event = applyToTicket(result)
+                            val answer = AnswerFormat.headline(result.title, result.artist)
+                            when (event) {
+                                is TicketEvent.Line -> showLineMessage(answer, event.label)
+                                is TicketEvent.Cell -> showCellMessage(event.label, result.title, result.artist)
+                                TicketEvent.NoCard, TicketEvent.Miss -> showTrackMessage(result)
+                                TicketEvent.Already -> Unit
+                            }
+                            sendTrack(result, event)
                             lastNotifiedKey = key
                             lastNotifiedAt = System.currentTimeMillis()
                         }
@@ -219,7 +225,43 @@ class ListeningService : Service() {
         wakeLock = null
     }
 
-    private fun showTrackMessage(result: TrackResult) {
+    private fun applyToTicket(result: TrackResult): TicketEvent {
+        val cells = TicketStore.cells(this)
+        if (cells.none { it.isNotBlank() }) return TicketEvent.NoCard
+        val hit = TicketMatcher.match(result.title, result.artist, cells) ?: return TicketEvent.Miss
+        val size = TicketStore.gridSize(this)
+        val target = TicketStore.goal(this)
+        val before = TicketStore.marks(this)
+        val already = before.getOrElse(hit.index) { false }
+        val metBefore = LineChecker.goalReached(size, before, target)
+        if (!already) TicketStore.setMarked(this, hit.index, true)
+        val after = TicketStore.marks(this)
+        if (!already && !metBefore && LineChecker.goalReached(size, after, target)) {
+            val line = LineChecker.winningLines(size, after).firstOrNull()
+            val names = if (line != null) LineChecker.label(cells, line) else cells[hit.index]
+            return TicketEvent.Line(hit.index, names)
+        }
+        if (!already) return TicketEvent.Cell(hit.index, cells[hit.index].ifBlank { result.title })
+        return TicketEvent.Already
+    }
+
+    private fun showCellMessage(cellLabel: String, title: String, artist: String) {
+        notifyResult(
+            title = AnswerFormat.headline(title, artist),
+            body = cellLabel,
+            alert = false,
+        )
+    }
+
+    private fun showLineMessage(answer: String, lineLabel: String) {
+        notifyResult(
+            title = getString(R.string.line_notification_title),
+            body = "$answer\n$lineLabel",
+            alert = true,
+        )
+    }
+
+    private fun notifyResult(title: String, body: String, alert: Boolean) {
         val nm = getSystemService(NotificationManager::class.java)
         val open = PendingIntent.getActivity(
             this,
@@ -229,12 +271,34 @@ class ListeningService : Service() {
         )
         val notification = NotificationCompat.Builder(this, RESULT_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_note)
-            .setContentTitle(result.title)
-            .setContentText(result.artist)
-            .setStyle(
-                NotificationCompat.BigTextStyle()
-                    .bigText("${result.title}\n${result.artist}")
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$title\n$body"))
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(!alert)
+            .setPriority(
+                if (alert) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT
             )
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .build()
+        nm.notify(RESULT_NOTIFICATION_ID, notification)
+    }
+
+    private fun showTrackMessage(result: TrackResult) {
+        val nm = getSystemService(NotificationManager::class.java)
+        val open = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val headline = AnswerFormat.headline(result.title, result.artist)
+        val notification = NotificationCompat.Builder(this, RESULT_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_note)
+            .setContentTitle(headline)
+            .setContentText(result.title)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(headline))
             .setContentIntent(open)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
@@ -296,13 +360,21 @@ class ListeningService : Service() {
         )
     }
 
-    private fun sendTrack(result: TrackResult) {
+    private fun sendTrack(result: TrackResult, event: TicketEvent) {
+        val line = (event as? TicketEvent.Line)?.label.orEmpty()
+        val cell = when (event) {
+            is TicketEvent.Line -> event.index
+            is TicketEvent.Cell -> event.index
+            else -> -1
+        }
         sendBroadcast(
             Intent(ACTION_TRACK)
                 .setPackage(packageName)
                 .putExtra(EXTRA_TITLE, result.title)
                 .putExtra(EXTRA_ARTIST, result.artist)
                 .putExtra(EXTRA_ALBUM, result.album.orEmpty())
+                .putExtra(EXTRA_CELL, cell)
+                .putExtra(EXTRA_LINE, line)
         )
     }
 
@@ -334,6 +406,16 @@ class ListeningService : Service() {
         const val EXTRA_TITLE = "title"
         const val EXTRA_ARTIST = "artist"
         const val EXTRA_ALBUM = "album"
+        const val EXTRA_CELL = "cell"
+        const val EXTRA_LINE = "line"
+
+        private sealed class TicketEvent {
+            data object NoCard : TicketEvent()
+            data object Miss : TicketEvent()
+            data object Already : TicketEvent()
+            data class Cell(val index: Int, val label: String) : TicketEvent()
+            data class Line(val index: Int, val label: String) : TicketEvent()
+        }
 
         private const val SERVICE_CHANNEL_ID = "quiet_service"
         private const val RESULT_CHANNEL_ID = "track_message"

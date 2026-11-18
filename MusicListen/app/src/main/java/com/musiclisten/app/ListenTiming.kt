@@ -1,24 +1,27 @@
 package com.musiclisten.app
 
-/** Tunable always-on timing. Kept in one place so unit tests can lock the contract. */
+/**
+ * Tuned for musical lotto: each song is only 15–30 seconds (blitz can be 5–7).
+ * Identify inside that window, then drop the cooldown as soon as the room goes quiet
+ * so the next clip is not skipped.
+ */
 object ListenTiming {
-    const val PROBE_MS = 900L
-    const val PROBE_GAP_MS = 900L
-    const val CAPTURE_MS = 7_000L
+    const val PROBE_MS = 700L
+    const val PROBE_GAP_MS = 300L
+    const val CAPTURE_MS = 4_500L
     const val REQUIRED_MUSIC_STREAK = 2
 
-    /** After a successful match before another AudD call. */
-    const val COOLDOWN_AFTER_MATCH_MS = 25_000L
+    /** A single confident local probe is enough to start identification. */
+    const val STRONG_PROBE_SCORE = 0.72
 
-    /** After AudD returned no match. */
-    const val COOLDOWN_AFTER_MISS_MS = 15_000L
+    /** While the same clip is still playing. Quiet gap resets this. */
+    const val COOLDOWN_AFTER_MATCH_MS = 12_000L
+    const val COOLDOWN_AFTER_MISS_MS = 6_000L
+    const val COOLDOWN_AFTER_ERROR_MS = 8_000L
 
-    /** After network/parse/recorder errors. */
-    const val COOLDOWN_AFTER_ERROR_MS = 20_000L
+    /** Do not buzz again for the same title while the clip repeats. */
+    const val SAME_TRACK_SUPPRESS_MS = 90_000L
 
-    /** Do not re-notify the same title+artist within this window. */
-    const val SAME_TRACK_SUPPRESS_MS = 40_000L
-
-    /** When ambient audio goes quiet, shrink remaining cooldown to at most this. */
-    const val QUIET_SOFTEN_COOLDOWN_MS = 8_000L
+    /** Consecutive quiet probes after which the next song may be sent immediately. */
+    const val QUIET_RESET_STREAK = 2
 }

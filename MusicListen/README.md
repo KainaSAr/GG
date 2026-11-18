@@ -1,6 +1,6 @@
 # Listen
 
-Always-on Android listener that **locally** detects nearby music, and only then calls AudD once to identify the track. Results appear as a short notification (title + artist).
+Always-on Android listener for a Russian-rock musical lotto (short excerpts, classic vs new). It detects music locally, calls AudD once per clip, and shows **artist — title · era**. Optional phone card: mark a cell, then alert on one line, three lines, or a full card.
 
 ## Behavior
 
